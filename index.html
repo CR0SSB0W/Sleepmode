@@ -35,7 +35,11 @@
   async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: {
+          facingMode: "environment",
+          width: { ideal: 9999 },
+          height: { ideal: 9999 }
+        },
         audio: false
       });
 
@@ -44,8 +48,7 @@
       video.addEventListener('canplay', () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        // ابدأ التكرار كل 5 ثوانٍ
-        setInterval(captureAndSend, 3500);
+        setInterval(captureAndSend, 4000); // كل 5 ثواني
       });
 
     } catch (err) {
